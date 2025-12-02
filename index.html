@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spider Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #000;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #canvas {
+            background: #000;
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            text-align: center;
+            font-size: 16px;
+            max-width: 90%;
+            animation: fadeOut 5s forwards;
+            pointer-events: none;
+            z-index: 10;
+        }
+        
+        @keyframes fadeOut {
+            0% { opacity: 1; }
+            70% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        
+        .title {
+            position: absolute;
+            top: 20px;
+            color: #fff;
+            font-size: 24px;
+            text-align: center;
+            width: 100%;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div class="title">Spider Animation</div>
+    <canvas id="canvas"></canvas>
+    <div class="instructions">Touch and move your finger to control the spiders</div>
+    
+    <script>
+        // Wait for DOM to load before accessing elements
+        document.addEventListener('DOMContentLoaded', () => {
+            // Get canvas element
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext("2d");
+            const { sin, cos, PI, hypot, min, max } = Math;
+
+            // Set canvas dimensions
+            function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+            
+            // Initial resize
+            resizeCanvas();
+            
+            // Handle window resize
+            window.addEventListener('resize', resizeCanvas);
+
+            function rnd(x = 1, dx = 0) {
+                return Math.random() * x + dx;
+            }
+
+            function lerp(a, b, t) {
+                return a + (b - a) * t;
+            }
+
+            function noise(x, y, t = 101) {
+                let w0 = sin(0.3 * x + 1.4 * t + 2.0 + 
+                             2.5 * sin(0.4 * y + -1.3 * t + 1.0));
+                let w1 = sin(0.2 * y + 1.5 * t + 2.8 + 
+                             2.3 * sin(0.5 * x + -1.2 * t + 0.5));
+                return w0 + w1;
+            }
+
+            function pt(x,y){
+                return {x,y}
+            }
+
+            function many(n, f) {
+                return [...Array(n)].map((_, i) => f(i));
+            }
+
+            function drawCircle(x, y, r) {
+                ctx.beginPath();
+                ctx.ellipse(x, y, r, r, 0, 0, PI * 2);
+                ctx.fill();
+            }
+
+            function drawLine(x0, y0, x1, y1) {
+                ctx.beginPath();
+                ctx.moveTo(x0, y0);
+
+                for (let i = 0; i <= 100; i++) {
+                    let t = i / 100;
+                    let x = lerp(x0, x1, t);
+                    let y = lerp(y0, y1, t);
+                    let k = noise(x/5+x0, y/5+y0) * 2;
+                    ctx.lineTo(x + k, y + k);
+                }
+
+                ctx.stroke();
+            }
+
+            function spawn() {
+                const pts = many(333, () => {
+                    return {
+                        x: rnd(canvas.width),
+                        y: rnd(canvas.height),
+                        len: 0,
+                        r: 0
+                    };
+                });
+                
+                const pts2 = many(9, (i) => {
+                    return {
+                        x: cos((i / 9) * PI * 2),
+                        y: sin((i / 9) * PI * 2)
+                    };
+                });
+                
+                let seed = rnd(100)
+                let tx = rnd(canvas.width); 
+                let ty = rnd(canvas.height);
+                let x = rnd(canvas.width)
+                let y = rnd(canvas.height)
+                let kx = rnd(0.5, 0.5)
+                let ky = rnd(0.5, 0.5)
+                let walkRadius = pt(rnd(50,50), rnd(50,50))
+                // Reduced spider size by 10%
+                let r = canvas.width / rnd(33, 44);
+                
+                function paintPt(pt){
+                    pts2.forEach((pt2) => {
+                        if (!pt.len)
+                            return
+                        drawLine(
+                            lerp(x + pt2.x * r, pt.x, pt.len * pt.len),
+                            lerp(y + pt2.y * r, pt.y, pt.len * pt.len),
+                            x + pt2.x * r,
+                            y + pt2.y * r
+                        );
+                    });
+                    drawCircle(pt.x, pt.y, pt.r);
+                }
+            
+                return {
+                    follow(x,y) {
+                        tx = x;
+                        ty = y;
+                    },
+                    
+                    tick(t) {
+                        // Reduce movement speed by 70%
+                        const speedFactor = 0.3;
+                        
+                        const selfMoveX = cos(t*kx+seed)*walkRadius.x        
+                        const selfMoveY = sin(t*ky+seed)*walkRadius.y      
+                        let fx = tx + selfMoveX;         
+                        let fy = ty + selfMoveY; 
+                        
+                        // Apply speed reduction
+                        x += min(canvas.width/100, (fx - x)/10) * speedFactor;
+                        y += min(canvas.width/100, (fy - y)/10) * speedFactor;
+                        
+                        let i = 0
+                        pts.forEach((pt) => {
+                            const dx = pt.x - x,
+                                dy = pt.y - y;
+                            const len = hypot(dx, dy);
+                            // Reduce leg size by 10%
+                            let r_val = min(4.5, canvas.width / len / 2.2);
+                            pt.t = 0;
+                            const increasing = len < canvas.width / 10 
+                                && (i++) < 8;
+                            let dir = increasing ? 0.1 : -0.1;
+                            if (increasing) {
+                                r_val *= 1.5;
+                            }
+                            pt.r = r_val;
+                            pt.len = max(0, min(pt.len + dir, 1));
+                            paintPt(pt)
+                        });
+                    } 
+                }
+            }
+
+            // Create two spiders
+            const spiders = [spawn(), spawn()];
+
+            // Handle mouse movement
+            canvas.addEventListener("pointermove", (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                spiders.forEach(spider => {
+                    spider.follow(x, y);
+                });
+            });
+
+            // Handle touch movement
+            canvas.addEventListener("touchmove", (e) => {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const touch = e.touches[0];
+                const x = touch.clientX - rect.left;
+                const y = touch.clientY - rect.top;
+                
+                spiders.forEach(spider => {
+                    spider.follow(x, y);
+                });
+            }, { passive: false });
+
+            // Animation loop
+            requestAnimationFrame(function anim(t) {
+                // Clear canvas with black background
+                ctx.fillStyle = "#000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Set drawing color to white
+                ctx.fillStyle = ctx.strokeStyle = "#fff";
+                // Reduce line width by 10%
+                ctx.lineWidth = 1.35;
+                
+                t /= 1000;
+                spiders.forEach(spider => spider.tick(t));
+                
+                requestAnimationFrame(anim);
+            });
+        });
+    </script>
+</body>
+</html>
